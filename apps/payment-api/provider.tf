@@ -13,7 +13,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "trubit-candidate-tfstate-bucket"
+    bucket = "daniel-practice-tfstate-bucket-99"
     key    = "assessment.tfstate" 
     region = "us-east-2"
   }
