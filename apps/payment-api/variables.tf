@@ -13,3 +13,4 @@ variable "environment" {
   description = "Deployment environment (e.g., dev, prod)"
   type        = string
 }
+# Triggering the practice pipeline
