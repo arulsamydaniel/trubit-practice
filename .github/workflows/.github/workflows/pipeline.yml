@@ -1,0 +1,85 @@
+name: Modular Terraform Smart Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Filter Paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            global:
+              - 'global/**'
+            payment:
+              - 'apps/payment-api/**'
+            user:
+              - 'apps/user-api/**'
+
+      - name: Build Dynamic Matrix
+        id: build-matrix
+        run: |
+          matrix="[]"
+          
+          if [ "${{ steps.filter.outputs.global }}" == "true" ]; then
+            matrix='["apps/payment-api", "apps/user-api"]'
+          else
+            if [ "${{ steps.filter.outputs.payment }}" == "true" ]; then
+              matrix=$(echo $matrix | jq -c '. += ["apps/payment-api"]')
+            fi
+            if [ "${{ steps.filter.outputs.user }}" == "true" ]; then
+              matrix=$(echo $matrix | jq -c '. += ["apps/user-api"]')
+            fi
+          fi
+          
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  terraform-plan:
+    name: Plan
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.matrix != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app_dir: ${{ fromJSON(needs.detect-changes.outputs.matrix) }}
+    
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: "us-east-2"
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ${{ matrix.app_dir }}
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ matrix.app_dir }}
+        run: terraform plan -no-color -out=tfplan > plan_output.txt
+
+      - name: Output Plan to Step Summary
+        if: always()
+        working-directory: ${{ matrix.app_dir }}
+        run: |
+          echo "### Terraform Plan for \`${{ matrix.app_dir }}\`" >> $GITHUB_STEP_SUMMARY
+          echo '```hcl' >> $GITHUB_STEP_SUMMARY
+          cat plan_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
