@@ -14,7 +14,7 @@ terraform {
 
   backend "s3" {
     bucket = "trubit-candidate-tfstate-bucket"
-    key    = "assessment-practice.tfstate" # Changed key slightly so it doesn't conflict with your real submission
+    key    = "assessment.tfstate" 
     region = "us-east-2"
   }
 }
